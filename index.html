@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おんさんそうさんの日本語クラス - 整合版 (v3)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #5D4037;
+            --bg-color: #FFF8E1;
+            --card-bg: #FFFFFF;
+            --accent: #FF6F00;
+            --story-bg: #E3F2FD;
+            --cover-bg: #FFECB3;
+            --text-main: #333;
+        }
+
+        .purple-theme {
+            --primary-color: #8e24aa !important;
+            --bg-color: #f3e5f5 !important;
+            --card-bg: #ffffff !important;
+            --accent: #7b1fa2 !important;
+            --text-main: #4a148c !important;
+            --shadow-color: rgba(74, 20, 140, 0.15);
+        }
+
+        body {
+            font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Serif JP", sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 工具列 */
+        #toolbar {
+            width: 100%;
+            background: #333;
+            color: white;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            flex-wrap: wrap;
+        }
+
+        .tool-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            font-family: sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .tool-btn:hover { opacity: 0.8; }
+        .btn-nav { background: #2196F3; color: white; }
+        .btn-action { background: #FF9800; color: white; }
+        .btn-clear { background: #f44336; color: white; }
+        .btn-pdf { background: #4CAF50; color: white; }
+        
+        .mode-switch {
+            background: #607D8B; color: white;
+            border: 2px solid #fff;
+        }
+        .mode-switch.active { background: #00BCD4; border-color: #00BCD4; transform: scale(1.05); }
+
+        /* 顏色選擇器 */
+        #color-palette {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 2px;
+            background: #444;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 1px solid #666;
+        }
+        .color-swatch:hover { transform: scale(1.2); }
+        .color-swatch.active { border: 2px solid white; box-shadow: 0 0 5px white; }
+
+        /* 幻燈片容器 */
+        #presentation-area {
+            position: relative;
+            width: 1024px;
+            height: 700px;
+            background: var(--bg-color);
+            margin-top: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+
+        /* 畫布層 */
+        #drawing-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 20;
+            cursor: crosshair;
+            pointer-events: none;
+        }
+        
+        /* 內容層設定 - 使用 Flex 防止重疊 */
+        .slide {
+            display: none;
+            width: 100%;
+            height: 100%;
+            padding: 40px;
+            box-sizing: border-box;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            user-select: text !important; 
+            -webkit-user-select: text !important;
+            
+            /* 重點修正：使用 Flex column 讓內容自動推擠 */
+            flex-direction: column;
+            overflow-y: auto; /* 若內容過多可捲動 */
+        }
+
+        .slide.active { display: flex; } /* 顯示時使用 Flex */
+
+        /* 封面 */
+        .cover-slide {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            border: 20px solid #FFF;
+        }
+        
+        .cover-title {
+            font-size: 60px;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-weight: 900;
+            text-shadow: 3px 3px 0px rgba(0,0,0,0.1);
+            line-height: 1.2;
+        }
+
+        .cover-subtitle {
+            font-size: 40px;
+            color: var(--accent);
+            background: white;
+            padding: 10px 40px;
+            border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            font-weight: bold;
+        }
+
+        .cover-decoration {
+            font-size: 100px;
+            margin-bottom: 30px;
+            color: var(--primary-color);
+        }
+
+        h2 {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 10px;
+            margin-top: 0;
+            font-size: 32px;
+            flex-shrink: 0; /* 標題不壓縮 */
+        }
+
+        /* 介紹區塊 */
+        .intro-box {
+            background: #FFF3E0;
+            border-left: 5px solid #FF9800;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 5px 5px 0;
+            flex-shrink: 0;
+        }
+        .purple-theme .intro-box {
+            background: #ffffff;
+            border-left: 5px solid var(--primary-color);
+        }
+
+        .intro-jp { font-size: 22px; color: #333; margin-bottom: 5px; display: block; }
+        .intro-cn { font-size: 18px; color: #666; }
+
+        /* 單字卡 */
+        .vocab-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+            flex-shrink: 0;
+        }
+
+        .vocab-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #D7CCC8;
+            text-align: center;
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .purple-theme .vocab-card {
+            border-color: #e1bee7;
+            box-shadow: 3px 3px 0px rgba(142, 36, 170, 0.2);
+        }
+
+        .jp-word { font-size: 30px; color: var(--primary-color); font-weight: bold; display: block; margin-bottom: 5px; }
+        ruby { font-family: "Yu Mincho", "Noto Serif JP", serif; }
+        rt { font-size: 0.6em; color: var(--accent); user-select: none; }
+        .cn-meaning { font-size: 18px; color: #555; border-top: 1px dashed #ccc; padding-top: 5px; margin-top: 5px; display: block; }
+
+        /* 文法區塊 - 修正定位 */
+        .grammar-box {
+            margin-top: auto; /* 自動推到底部 */
+            background: #EFEBE9;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 8px solid var(--accent);
+            width: 100%; /* 佔滿容器寬度 */
+            box-sizing: border-box;
+            margin-bottom: 10px; /* 留一點底邊距 */
+        }
+
+        .grammar-title { font-weight: bold; color: var(--accent); font-size: 18px; margin-bottom: 5px; display: block; }
+        .sentence { font-size: 24px; margin-bottom: 5px; }
+        .sentence-cn { font-size: 18px; color: #666; }
+        .highlight { color: #D81B60; font-weight: bold; }
+        .purple-theme .highlight { color: var(--primary-color); }
+
+        /* 故事模式 */
+        .story-slide { background-color: var(--story-bg) !important; }
+        .story-container { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; flex-grow: 1; }
+        .dialogue-row { display: flex; align-items: flex-start; gap: 15px; }
+        .dialogue-row.right { flex-direction: row-reverse; }
+        .avatar {
+            width: 80px; height: 80px; border-radius: 50%; background: #ccc;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: white; font-size: 24px; border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex-shrink: 0; user-select: none;
+        }
+        .avatar.me { background: #FF4081; }
+        .avatar.friend { background: #2196F3; }
+        .bubble {
+            background: white; padding: 20px; border-radius: 15px; position: relative;
+            max-width: 70%; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-size: 24px; line-height: 1.8;
+        }
+        .bubble::after {
+            content: ''; position: absolute; top: 20px; width: 0; height: 0; border: 10px solid transparent;
+        }
+        .dialogue-row .bubble::after { left: -20px; border-right-color: white; }
+        .dialogue-row.right .bubble::after { right: -20px; left: auto; border-left-color: white; }
+        .story-word { color: #D81B60; font-weight: bold; border-bottom: 2px solid #D81B60; }
+
+        /* 食感篇佈局優化 */
+        .split-layout { display: flex; flex-direction: row; gap: 30px; height: 100%; padding-bottom: 40px; }
+        .slide-content-left { flex: 1; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; padding-right: 10px; }
+        .slide-content-right {
+            flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: var(--card-bg); border-radius: 20px; padding: 20px;
+            box-shadow: 8px 8px 0px rgba(0,0,0,0.1); position: relative;
+        }
+        
+        .img-placeholder {
+            width: 100%; height: 200px; background-color: #fce4ec; border: 2px dashed var(--accent);
+            border-radius: 10px; display: flex; flex-direction: column; justify-content: center;
+            align-items: center; color: var(--primary-color); margin-bottom: 20px;
+        }
+        .img-placeholder i { font-size: 48px; margin-bottom: 10px; }
+
+        /* 紫色主題列表 (食感篇) */
+        .purple-list ul { list-style: none; padding: 0; }
+        .purple-list li {
+            padding-left: 1.5em; position: relative;
+            font-size: 22px; /* 增大字體 */
+            margin-bottom: 12px; line-height: 1.6;
+        }
+        .purple-list li::before {
+            content: '\f111'; font-family: 'Font Awesome 6 Free'; font-weight: 900;
+            position: absolute; left: 0; color: var(--accent); font-size: 0.6em; top: 0.6em;
+        }
+        
+        /* 食感篇文字優化 */
+        .text-lg { font-size: 26px; line-height: 1.8; margin-bottom: 15px; }
+        .text-md { font-size: 22px; line-height: 1.6; color: #555; margin-bottom: 10px; }
+        .jp-sentence { font-size: 28px; font-weight: bold; color: var(--text-main); margin-bottom: 5px; }
+        .cn-translation { font-size: 20px; color: #666; margin-bottom: 20px; border-left: 4px solid #ddd; padding-left: 10px; }
+
+        .comparison-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 20px; }
+        .comparison-table th { background: var(--primary-color); color: white; padding: 12px; width: 50%; }
+        .comparison-table td { padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; background: white; }
+        .bad-col { background-color: #fff0f5 !important; }
+        .good-col { background-color: #f0f8ff !important; }
+
+        .quiz-option {
+            display: block; width: 100%; padding: 15px; margin: 8px 0;
+            border: 2px solid var(--primary-color); border-radius: 10px;
+            background: white; color: var(--text-main); font-size: 22px;
+            cursor: pointer; text-align: left; transition: 0.3s;
+        }
+        .quiz-option:hover { background-color: #eee; }
+
+        .page-num { position: absolute; bottom: 10px; right: 20px; font-size: 18px; color: #888; }
+        .brush-size { width: 100px; }
+
+        /* 打字框 */
+        .user-text-box {
+            position: absolute; background: rgba(255, 255, 255, 0.9);
+            border: 2px solid var(--accent); padding: 5px 10px;
+            min-width: 100px; min-height: 40px; font-size: 24px;
+            color: #333; z-index: 100; border-radius: 5px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.2); font-family: "Noto Serif JP", serif;
+        }
+        .text-drag-handle {
+            position: absolute; top: -20px; left: 0; width: 100%; height: 20px;
+            background: var(--accent); cursor: move; border-radius: 5px 5px 0 0;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0.5; transition: opacity 0.2s;
+        }
+        .user-text-box:hover .text-drag-handle { opacity: 1; }
+        .text-drag-handle::before { content: ':::'; color: white; font-size: 12px; letter-spacing: 2px; }
+        .text-content { outline: none; min-height: 30px; cursor: text; }
+
+        /* 游標模式 */
+        body.pointer-mode #presentation-area { cursor: default; }
+        body.text-mode #presentation-area { cursor: text; }
+        body.draw-mode #presentation-area { cursor: crosshair; }
+
+    </style>
+</head>
+<body class="pointer-mode">
+
+<div id="toolbar">
+    <div>
+        <button class="tool-btn btn-nav" onclick="changeSlide(-1)">◀ 上一頁</button>
+        <span id="slide-indicator" style="font-size:18px;">1 / 22</span>
+        <button class="tool-btn btn-nav" onclick="changeSlide(1)">下一頁 ▶</button>
+    </div>
+    <div style="border-left:1px solid #666; height:30px; margin:0 10px;"></div>
+    
+    <!-- 工具按鈕區 -->
+    <button id="mode-pointer" class="tool-btn mode-switch active" onclick="setMode('pointer')">
+        <i class="fa-solid fa-arrow-pointer"></i> 選取
+    </button>
+    <button id="mode-text" class="tool-btn mode-switch" onclick="setMode('text')">
+        <i class="fa-solid fa-i-cursor"></i> 打字
+    </button>
+    <button id="mode-draw" class="tool-btn mode-switch" onclick="setMode('draw')">
+        <i class="fa-solid fa-pen"></i> 畫筆
+    </button>
+    
+    <div style="border-left:1px solid #666; height:30px; margin:0 10px;"></div>
+    <div id="color-palette"></div>
+    <input type="range" class="brush-size" id="brush-size" min="1" max="20" value="3" title="筆刷大小">
+    <button class="tool-btn" onclick="setEraser()" style="background:#9E9E9E;"><i class="fa-solid fa-eraser"></i> 橡皮擦</button>
+    <button class="tool-btn btn-clear" onclick="clearCanvas()"><i class="fa-solid fa-trash"></i> 清除筆跡</button>
+    <div style="border-left:1px solid #666; height:30px; margin:0 10px;"></div>
+    <button class="tool-btn btn-pdf" onclick="savePDF()"><i class="fa-solid fa-file-pdf"></i> 存為PDF</button>
+</div>
+
+<div id="presentation-area">
+    <canvas id="drawing-canvas" width="1024" height="700"></canvas>
+
+    <!-- Slide 1: Cover -->
+    <div class="slide cover-slide active" id="slide-1">
+        <div class="cover-decoration">🌾 🍙 🌾</div>
+        <div class="cover-title">おんさんそうさんの<br>日本語クラス</div>
+        <div class="cover-subtitle">健康米篇</div>
+        <div class="page-num">1 / 22</div>
+    </div>
+
+    <!-- Slide 2: Vocab -->
+    <div class="slide" id="slide-2">
+        <h2>2. 分づき米とは (什麼是分搗米)</h2>
+        <div class="intro-box">
+            <span class="intro-jp"><ruby>米<rt>こめ</rt></ruby>の<ruby>精米<rt>せいまい</rt></ruby><ruby>歩合<rt>ぶあい</rt></ruby>は<ruby>自由<rt>じゆう</rt></ruby>に<ruby>選<rt>えら</rt></ruby>べます。</span>
+            <span class="intro-cn">米飯的精製比例是可以自由選擇的。</span>
+        </div>
+        <div class="vocab-grid">
+            <div class="vocab-card"><span class="jp-word"><ruby>加工<rt>かこう</rt></ruby></span><span class="cn-meaning">加工</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>技術<rt>ぎじゅつ</rt></ruby></span><span class="cn-meaning">技術</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>選<rt>えら</rt></ruby>べる</span><span class="cn-meaning">能選擇</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>玄米<rt>げんまい</rt></ruby></span><span class="cn-meaning">糙米</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>栄養<rt>えいよう</rt></ruby></span><span class="cn-meaning">營養</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>歩合<rt>ぶあい</rt></ruby></span><span class="cn-meaning">比率</span></div>
+        </div>
+        <div class="grammar-box">
+            <span class="grammar-title">📌 N5 文法：〜たり〜たりする</span>
+            <div class="sentence">精米歩合を<span class="highlight">選んだり、変えたりします</span>。</div>
+            <div class="sentence-cn">我們會選擇或改變精米的比例。</div>
+        </div>
+        <div class="page-num">2 / 22</div>
+    </div>
+
+    <!-- Slide 3 -->
+    <div class="slide" id="slide-3">
+        <h2>3. 三分と五分 (三分與五分)</h2>
+        <div class="intro-box">
+            <span class="intro-jp"><ruby>三分<rt>さんぶ</rt></ruby>づきは<ruby>玄米<rt>げんまい</rt></ruby>に<ruby>近<rt>ちか</rt></ruby>く、<ruby>五分<rt>ごぶ</rt></ruby>づきはバランスが<ruby>良<rt>よ</rt></ruby>いです。</span>
+            <span class="intro-cn">三分搗接近糙米，五分搗則是平衡的選擇。</span>
+        </div>
+        <div class="vocab-grid">
+            <div class="vocab-card"><span class="jp-word"><ruby>三分<rt>さんぶ</rt></ruby>づき</span><span class="cn-meaning">三分搗</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>五分<rt>ごぶ</rt></ruby>づき</span><span class="cn-meaning">五分搗</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>米糠<rt>こめぬか</rt></ruby></span><span class="cn-meaning">米糠</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>中間<rt>ちゅうかん</rt></ruby></span><span class="cn-meaning">中間</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>消化<rt>しょうか</rt></ruby></span><span class="cn-meaning">消化</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>比較的<rt>ひかくてき</rt></ruby></span><span class="cn-meaning">比較的</span></div>
+        </div>
+        <div class="grammar-box">
+            <span class="grammar-title">📌 N5 文法：〜より〜ほうが...</span>
+            <div class="sentence">玄米<span class="highlight">より</span>五分づきの<span class="highlight">ほうが</span>食べやすいです。</div>
+            <div class="sentence-cn">比起糙米，五分搗米更容易入口。</div>
+        </div>
+        <div class="page-num">3 / 22</div>
+    </div>
+
+    <!-- Slide 4 -->
+    <div class="slide" id="slide-4">
+        <h2>4. 胚芽と七分 (胚芽與七分)</h2>
+        <div class="intro-box">
+            <span class="intro-jp"><ruby>七分<rt>しちぶ</rt></ruby>づきは<ruby>白米<rt>はくまい</rt></ruby>と<ruby>同<rt>おな</rt></ruby>じように<ruby>炊<rt>た</rt></ruby>けますが、<ruby>栄養<rt>えいよう</rt></ruby>があります。</span>
+            <span class="intro-cn">七分搗煮起來像白米，但保有營養。</span>
+        </div>
+        <div class="vocab-grid">
+            <div class="vocab-card"><span class="jp-word"><ruby>七分<rt>しちぶ</rt></ruby>づき</span><span class="cn-meaning">七分搗</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>胚芽<rt>はいが</rt></ruby></span><span class="cn-meaning">胚芽</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>残<rt>のこ</rt></ruby>る</span><span class="cn-meaning">殘留</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>白米<rt>はくまい</rt></ruby></span><span class="cn-meaning">白米</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>状態<rt>じょうたい</rt></ruby></span><span class="cn-meaning">狀態</span></div>
+            <div class="vocab-card"><span class="jp-word">ほぼ</span><span class="cn-meaning">幾乎</span></div>
+        </div>
+        <div class="grammar-box">
+            <span class="grammar-title">📌 N4 文法：〜まま</span>
+            <div class="sentence">胚芽を<span class="highlight">残したまま</span>精米します。</div>
+            <div class="sentence-cn">在保留胚芽的狀態下進行精米。</div>
+        </div>
+        <div class="page-num">4 / 22</div>
+    </div>
+
+    <!-- Slide 5 -->
+    <div class="slide" id="slide-5">
+        <h2>5. 精米のプロセス (精米的過程)</h2>
+        <div class="intro-box">
+            <span class="intro-jp">ヌカ<ruby>層<rt>そう</rt></ruby>を<ruby>削<rt>けず</rt></ruby>ることで、<ruby>味<rt>あじ</rt></ruby>と<ruby>食感<rt>しょっかん</rt></ruby>が<ruby>変<rt>か</rt></ruby>わります。</span>
+            <span class="intro-cn">透過切削米糠層，味道與口感會改變。</span>
+        </div>
+        <div class="vocab-grid">
+            <div class="vocab-card"><span class="jp-word"><ruby>精米<rt>せいまい</rt></ruby></span><span class="cn-meaning">精製米</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>表面<rt>ひょうめん</rt></ruby></span><span class="cn-meaning">表面</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>削<rt>けず</rt></ruby>る</span><span class="cn-meaning">切削</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>食感<rt>しょっかん</rt></ruby></span><span class="cn-meaning">口感</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>香<rt>かお</rt></ruby>り</span><span class="cn-meaning">香氣</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>違<rt>ちが</rt></ruby>い</span><span class="cn-meaning">不同</span></div>
+        </div>
+        <div class="grammar-box">
+            <span class="grammar-title">📌 N4 文法：〜ことがある</span>
+            <div class="sentence">分づき米を<span class="highlight">食べたことがありません</span>。</div>
+            <div class="sentence-cn">我不曾吃過分搗米。</div>
+        </div>
+        <div class="page-num">5 / 22</div>
+    </div>
+
+    <!-- Slide 6 -->
+    <div class="slide" id="slide-6">
+        <h2>6. 健康と選択 (健康與選擇)</h2>
+        <div class="intro-box">
+            <span class="intro-jp"><ruby>毎日<rt>まいにち</rt></ruby><ruby>食<rt>た</rt></ruby>べるお<ruby>米<rt>こめ</rt></ruby>だから、<ruby>自分<rt>じぶん</rt></ruby>に<ruby>合<rt>あ</rt></ruby>うものを<ruby>見<rt>み</rt></ruby>つけましょう。</span>
+            <span class="intro-cn">因為是每天吃的米，找出適合自己的吧。</span>
+        </div>
+        <div class="vocab-grid">
+            <div class="vocab-card"><span class="jp-word"><ruby>食物<rt>しょくもつ</rt></ruby><ruby>繊維<rt>せんい</rt></ruby></span><span class="cn-meaning">膳食纖維</span></div>
+            <div class="vocab-card"><span class="jp-word">ミネラル</span><span class="cn-meaning">礦物質</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>豊富<rt>ほうふ</rt></ruby></span><span class="cn-meaning">豐富</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>自分<rt>じぶん</rt></ruby></span><span class="cn-meaning">自己</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>好<rt>この</rt></ruby>み</span><span class="cn-meaning">喜好</span></div>
+            <div class="vocab-card"><span class="jp-word"><ruby>調整<rt>ちょうせい</rt></ruby></span><span class="cn-meaning">調整</span></div>
+        </div>
+        <div class="grammar-box">
+            <span class="grammar-title">📌 N4 文法：〜ことができる</span>
+            <div class="sentence">好みで精米歩合を<span class="highlight">選ぶことができます</span>。</div>
+            <div class="sentence-cn">可以根據喜好選擇精米程度。</div>
+        </div>
+        <div class="page-num">6 / 22</div>
+    </div>
+
+    <!-- Slide 7 -->
+    <div class="slide story-slide" id="slide-7">
+        <h2>ストーリー 1：お米屋さんで (在米店)</h2>
+        <div class="story-container">
+            <div class="dialogue-row">
+                <div class="avatar me">私</div>
+                <div class="bubble">
+                    <ruby>最近<rt>さいきん</rt></ruby>、<ruby>健康<rt>けんこう</rt></ruby>のために<span class="story-word"><ruby>玄米<rt>げんまい</rt></ruby></span>を<ruby>食<rt>た</rt></ruby>べたいけど、<ruby>硬<rt>かた</rt></ruby>いのは<ruby>苦手<rt>にがて</rt></ruby>だな…。
+                    <br><span style="font-size:16px; color:#666;">最近為了健康想吃糙米，但不喜歡硬硬的口感...</span>
+                </div>
+            </div>
+            <div class="dialogue-row right">
+                <div class="avatar friend">親友</div>
+                <div class="bubble">
+                    じゃあ、「<span class="story-word"><ruby>分<rt>ぶ</rt></ruby>づき<ruby>米<rt>まい</rt></ruby></span>」はどう？ここで<ruby>精米<rt>せいまい</rt></ruby><span class="story-word"><ruby>歩合<rt>ぶあい</rt></ruby></span>を<span class="story-word"><ruby>選<rt>えら</rt></ruby>べる</span>よ！
+                    <br><span style="font-size:16px; color:#666;">那「分搗米」如何？這裡可以選擇精米比例喔！</span>
+                </div>
+            </div>
+            <div class="dialogue-row">
+                <div class="avatar me">私</div>
+                <div class="bubble">
+                    へえ！<span class="story-word"><ruby>栄養<rt>えいよう</rt></ruby></span>は<ruby>残<rt>のこ</rt></ruby>したまま、<ruby>白米<rt>はくまい</rt></ruby>みたいに<ruby>食<rt>た</rt></ruby>べられるの？
+                    <br><span style="font-size:16px; color:#666;">欸！可以在保留營養的狀態下，像白米一樣吃嗎？</span>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">7 / 22</div>
+    </div>
+
+    <!-- Slide 8 -->
+    <div class="slide story-slide" id="slide-8">
+        <h2>ストーリー 2：キッチンで (在廚房)</h2>
+        <div class="story-container">
+            <div class="dialogue-row right">
+                <div class="avatar friend">親友</div>
+                <div class="bubble">
+                    <ruby>今日<rt>きょう</rt></ruby>は<span class="story-word"><ruby>五分<rt>ごぶ</rt></ruby>づき</span>にしてみたよ。<ruby>玄米<rt>げんまい</rt></ruby>と<ruby>白米<rt>はくまい</rt></ruby>の<span class="story-word"><ruby>中間<rt>ちゅうかん</rt></ruby></span>だね。
+                    <br><span style="font-size:16px; color:#666;">今天試試看五分搗米喔。是糙米和白米的中間值呢。</span>
+                </div>
+            </div>
+            <div class="dialogue-row">
+                <div class="avatar me">私</div>
+                <div class="bubble">
+                    いい<span class="story-word"><ruby>香<rt>かお</rt></ruby>り</span>！<ruby>玄米<rt>げんまい</rt></ruby>より<span class="story-word"><ruby>消化<rt>しょうか</rt></ruby></span>も<ruby>良<rt>よ</rt></ruby>さそうだね。
+                    <br><span style="font-size:16px; color:#666;">好香喔！消化似乎也比糙米好。</span>
+                </div>
+            </div>
+            <div class="dialogue-row right">
+                <div class="avatar friend">親友</div>
+                <div class="bubble">
+                    うん、ボソボソしないし、<span class="story-word"><ruby>食感<rt>しょっかん</rt></ruby></span>もモチモチだよ。
+                    <br><span style="font-size:16px; color:#666;">嗯，不會粗糙，口感也很Q彈喔。</span>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">8 / 22</div>
+    </div>
+
+    <!-- Slide 9 -->
+    <div class="slide story-slide" id="slide-9">
+        <h2>ストーリー 3：いただきます (開動了)</h2>
+        <div class="story-container">
+            <div class="dialogue-row">
+                <div class="avatar me">私</div>
+                <div class="bubble">
+                    <ruby>美味<rt>おい</rt></ruby>しい！<span class="story-word"><ruby>胚芽<rt>はいが</rt></ruby></span>が<span class="story-word"><ruby>残<rt>のこ</rt></ruby>って</span>いるから、<ruby>噛<rt>か</rt></ruby>むと<ruby>甘<rt>あま</rt></ruby>いね。
+                    <br><span style="font-size:16px; color:#666;">好吃！因為保留了胚芽，越嚼越甜呢。</span>
+                </div>
+            </div>
+            <div class="dialogue-row right">
+                <div class="avatar friend">親友</div>
+                <div class="bubble">
+                    でしょう？<span class="story-word"><ruby>自分<rt>じぶん</rt></ruby></span>の<span class="story-word"><ruby>好<rt>この</rt></ruby>み</span>に<span class="story-word"><ruby>調整<rt>ちょうせい</rt></ruby></span>できるのが<ruby>一番<rt>いちばん</rt></ruby>だね。
+                    <br><span style="font-size:16px; color:#666;">對吧？能調整成自己的喜好是最棒的了。</span>
+                </div>
+            </div>
+            <div class="dialogue-row">
+                <div class="avatar me">私</div>
+                <div class="bubble">
+                    <ruby>明日<rt>あした</rt></ruby>から<ruby>私<rt>わたし</rt></ruby>の<ruby>家<rt>いえ</rt></ruby>も<ruby>分<rt>ぶ</rt></ruby>づき<ruby>米<rt>まい</rt></ruby>にする！
+                    <br><span style="font-size:16px; color:#666;">明天開始我家也要吃分搗米！</span>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">9 / 22</div>
+    </div>
+
+    <!-- Slide 10: Cover for Section 2 -->
+    <div class="slide cover-slide purple-theme" id="slide-10">
+        <div class="cover-decoration"><i class="fa-solid fa-bowl-rice"></i></div>
+        <div class="cover-title"><ruby>食感<rt>しょっかん</rt></ruby>・<ruby>状態<rt>じょうたい</rt></ruby>を<br><ruby>表<rt>あらわ</rt></ruby>す<ruby>言葉<rt>ことば</rt></ruby></div>
+        <div class="cover-subtitle" style="color: #7b1fa2;">水分不足編</div>
+        <div class="page-num">10 / 22</div>
+    </div>
+
+    <!-- Slide 11: Pasa-pasa -->
+    <div class="slide purple-theme" id="slide-11">
+        <div class="split-layout">
+            <div class="slide-content-left purple-list">
+                <h2>① パサパサ</h2>
+                <div class="text-lg"><span class="highlight"><ruby>意味<rt>いみ</rt></ruby>:</span> <ruby>水分<rt>すいぶん</rt></ruby>や<ruby>油分<rt>ゆぶん</rt></ruby>が<ruby>抜<rt>ぬ</rt></ruby>けて、<ruby>乾<rt>かわ</rt></ruby>いてしまっている<ruby>状態<rt>じょうたい</rt></ruby>。</div>
+                <div class="text-md">（意思：水分或油脂流失，變乾的狀態。）</div>
+                <div class="text-lg"><span class="highlight">イメージ:</span> <ruby>軽<rt>かる</rt></ruby>く、まとまりがなく、<ruby>口<rt>くち</rt></ruby>の<ruby>中<rt>なか</rt></ruby>でバラバラになる<ruby>感<rt>かん</rt></ruby>じ。</div>
+                <div class="text-md">（印象：輕輕的，沒有黏性，在口中散開的感覺。）</div>
+            </div>
+            <div class="slide-content-right purple-list">
+                <h3>よく<ruby>使<rt>つか</rt></ruby>う<ruby>食材<rt>しょくざい</rt></ruby> (常用食材)</h3>
+                <ul>
+                    <li>ご<ruby>飯<rt>はん</rt></ruby>（<ruby>古<rt>ふる</rt></ruby>くなったもの）<br><span style="font-size:0.8em; color:#666;">(變舊的飯)</span></li>
+                    <li><ruby>焼<rt>や</rt></ruby>き<ruby>魚<rt>ざかな</rt></ruby>（<ruby>焼<rt>や</rt></ruby>きすぎたもの）<br><span style="font-size:0.8em; color:#666;">(烤過頭的魚)</span></li>
+                    <li><ruby>鶏<rt>とり</rt></ruby>のささみ <span style="font-size:0.8em; color:#666;">(雞柳)</span></li>
+                    <li>ゆで<ruby>卵<rt>たまご</rt></ruby>の<ruby>黄身<rt>きみ</rt></ruby> <span style="font-size:0.8em; color:#666;">(水煮蛋的蛋黃)</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="page-num">11 / 22</div>
+    </div>
+
+    <!-- Slide 12: Moso-moso -->
+    <div class="slide purple-theme" id="slide-12">
+        <div class="split-layout">
+            <div class="slide-content-left purple-list">
+                <h2>② モソモソ / もそもそ</h2>
+                <div class="text-lg"><span class="highlight"><ruby>意味<rt>いみ</rt></ruby>:</span> <ruby>水分<rt>すいぶん</rt></ruby>が<ruby>少<rt>すく</rt></ruby>なく、<ruby>口<rt>くち</rt></ruby>の<ruby>中<rt>なか</rt></ruby>の<ruby>水分<rt>すいぶん</rt></ruby>を<ruby>奪<rt>うば</rt></ruby>われるような<ruby>不快<rt>ふかい</rt></ruby>な<ruby>食感<rt>しょっかん</rt></ruby>。</div>
+                <div class="text-md">（意思：水分少，吸走口中水分的不舒服口感。）</div>
+                <div class="text-lg"><span class="highlight">イメージ:</span> <ruby>口<rt>くち</rt></ruby>の<ruby>中<rt>なか</rt></ruby>で<ruby>広<rt>ひろ</rt></ruby>がり、<ruby>喉<rt>のど</rt></ruby>に<ruby>詰<rt>つ</rt></ruby>まりそうな<ruby>感<rt>かん</rt></ruby>じ。</div>
+                <div class="text-md">（印象：在口中擴散，感覺快噎住的樣子。）</div>
+            </div>
+            <div class="slide-content-right purple-list">
+                <div class="img-placeholder">
+                    <i class="fa-solid fa-cookie-bite"></i>
+                    <small>モソモソするクッキー</small>
+                </div>
+                <h3>よく<ruby>使<rt>つか</rt></ruby>う<ruby>食材<rt>しょくざい</rt></ruby> (常用食材)</h3>
+                <ul>
+                    <li>おから（<ruby>豆腐<rt>とうふ</rt></ruby>のカス）<br><span style="font-size:0.8em; color:#666;">(豆渣)</span></li>
+                    <li><ruby>冷<rt>ひ</rt></ruby>えたご<ruby>飯<rt>はん</rt></ruby> <span style="font-size:0.8em; color:#666;">(冷掉的飯)</span></li>
+                    <li>ふかした<ruby>芋<rt>いも</rt></ruby> <span style="font-size:0.8em; color:#666;">(蒸熟的地瓜/芋頭)</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="page-num">12 / 22</div>
+    </div>
+
+    <!-- Slide 13: Boso-boso -->
+    <div class="slide purple-theme" id="slide-13">
+        <div class="split-layout">
+            <div class="slide-content-left purple-list">
+                <h2>③ ボソボソ / ぼそぼそ</h2>
+                <div class="text-lg"><span class="highlight"><ruby>意味<rt>いみ</rt></ruby>:</span> <ruby>弾力<rt>だんりょく</rt></ruby>や<ruby>粘<rt>ねば</rt></ruby>り<ruby>気<rt>け</rt></ruby>がなく、ボロボロと<ruby>崩<rt>くず</rt></ruby>れるような<ruby>悪<rt>わる</rt></ruby>い<ruby>食感<rt>しょっかん</rt></ruby>。</div>
+                <div class="text-md">（意思：沒彈性也沒黏性，散散的不好口感。）</div>
+                <div class="text-lg"><span class="highlight">イメージ:</span> <ruby>古<rt>ふる</rt></ruby>い、<ruby>質<rt>しつ</rt></ruby>が<ruby>悪<rt>わる</rt></ruby>い、<ruby>調理<rt>ちょうり</rt></ruby><ruby>失敗<rt>しっぱい</rt></ruby>。</div>
+                <div class="text-md">（印象：舊的、品質差、料理失敗。）</div>
+            </div>
+            <div class="slide-content-right purple-list">
+                <h3>よく<ruby>使<rt>つか</rt></ruby>う<ruby>食材<rt>しょくざい</rt></ruby> (常用食材)</h3>
+                <ul>
+                    <li><ruby>安<rt>やす</rt></ruby>いお<ruby>米<rt>こめ</rt></ruby> <span style="font-size:0.8em; color:#666;">(便宜的米)</span></li>
+                    <li><ruby>芯<rt>しん</rt></ruby>が<ruby>残<rt>のこ</rt></ruby>ったご<ruby>飯<rt>はん</rt></ruby> <span style="font-size:0.8em; color:#666;">(沒煮熟的飯)</span></li>
+                    <li><ruby>伸<rt>の</rt></ruby>びたうどん<ruby>等<rt>など</rt></ruby>の<ruby>麺類<rt>めんるい</rt></ruby> <br><span style="font-size:0.8em; color:#666;">(泡爛的烏龍麵等)</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="page-num">13 / 22</div>
+    </div>
+
+    <!-- Slide 14: Poso-poso -->
+    <div class="slide purple-theme" id="slide-14">
+        <div class="split-layout">
+            <div class="slide-content-left purple-list">
+                <h2>④ ポソポソ / ぽそぽそ</h2>
+                <div class="text-lg"><span class="highlight"><ruby>意味<rt>いみ</rt></ruby>:</span> パサパサよりも<ruby>少<rt>すこ</rt></ruby>し<ruby>軽<rt>かる</rt></ruby>く、<ruby>小<rt>ちい</rt></ruby>さく<ruby>乾<rt>かわ</rt></ruby>いている<ruby>感<rt>かん</rt></ruby>じ。</div>
+                <div class="text-md">（意思：比「パサパサ」輕一點，微乾的感覺。）</div>
+                <div class="text-lg"><span class="highlight">イメージ:</span> <ruby>少量<rt>しょうりょう</rt></ruby>で、<ruby>少<rt>すこ</rt></ruby>し<ruby>粉<rt>こな</rt></ruby>っぽい<ruby>乾燥<rt>かんそう</rt></ruby><ruby>感<rt>かん</rt></ruby>。</div>
+                <div class="text-md">（印象：少量的、帶點粉粉的乾燥感。）</div>
+            </div>
+            <div class="slide-content-right purple-list">
+                <h3>よく<ruby>使<rt>つか</rt></ruby>う<ruby>食材<rt>しょくざい</rt></ruby> (常用食材)</h3>
+                <ul>
+                    <li><ruby>炒<rt>い</rt></ruby>り<ruby>豆腐<rt>どうふ</rt></ruby> <span style="font-size:0.8em; color:#666;">(乾炒豆腐)</span></li>
+                    <li>そぼろ（<ruby>肉<rt>にく</rt></ruby>や<ruby>卵<rt>たまご</rt></ruby>） <span style="font-size:0.8em; color:#666;">(肉燥或炒蛋碎)</span></li>
+                    <li><ruby>乾燥<rt>かんそう</rt></ruby>した<ruby>米粒<rt>こめつぶ</rt></ruby> <span style="font-size:0.8em; color:#666;">(乾掉的米粒)</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="page-num">14 / 22</div>
+    </div>
+
+    <!-- Slide 15: Rice 1 -->
+    <div class="slide purple-theme" id="slide-15">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2>ご<ruby>飯<rt>はん</rt></ruby> - <ruby>炊<rt>た</rt></ruby>き<ruby>方<rt>かた</rt></ruby><ruby>失敗<rt>しっぱい</rt></ruby></h2>
+                
+                <div class="jp-sentence">「<ruby>水加減<rt>みずかげん</rt></ruby>を<ruby>間違<rt>まちが</rt></ruby>えたせいで、<ruby>炊<rt>た</rt></ruby>きあがりのご<ruby>飯<rt>はん</rt></ruby>が<span class="highlight">パサパサ</span>している。」</div>
+                <div class="cn-translation">
+                    因水加錯了，煮出來的飯乾巴巴的。<br>
+                    <small>（解說：不飽滿，很乾燥。）</small>
+                </div>
+
+                <div class="jp-sentence">「このお<ruby>米<rt>こめ</rt></ruby>、<ruby>古米<rt>こまい</rt></ruby>だからか、<ruby>炊<rt>た</rt></ruby>いても<span class="highlight">ボソボソ</span>した<ruby>食感<rt>しょっかん</rt></ruby>だね。」</div>
+                <div class="cn-translation">
+                    這米可能是舊米，煮起來口感粗糙散散的。<br>
+                    <small>（解說：米本身水分流失，沒有黏性。）</small>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="jp-sentence">「<ruby>芯<rt>しん</rt></ruby>が<ruby>残<rt>のこ</rt></ruby>っていて、なんだか<span class="highlight">ポソポソ</span>したご<ruby>飯<rt>はん</rt></ruby>になってしまった。」</div>
+                <div class="cn-translation">
+                    米心沒煮透，變成了粉粉的乾硬口感。<br>
+                    <small>（解說：沒有蓬鬆感，帶有粉狀硬度。）</small>
+                </div>
+                <div class="img-placeholder">
+                    <i class="fa-solid fa-xmark" style="color: #e53935;"></i>
+                    <small><ruby>失敗<rt>しっぱい</rt></ruby>したご<ruby>飯<rt>はん</rt></ruby></small>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">15 / 22</div>
+    </div>
+
+    <!-- Slide 16: Rice 2 -->
+    <div class="slide purple-theme" id="slide-16">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2>ご<ruby>飯<rt>はん</rt></ruby> - <ruby>保存<rt>ほぞん</rt></ruby><ruby>状態<rt>じょうたい</rt></ruby></h2>
+                
+                <div class="jp-sentence">「<ruby>冷蔵庫<rt>れいぞうこ</rt></ruby>にラップをかけずに入れておいたら、ご<ruby>飯<rt>はん</rt></ruby>が<span class="highlight">カピカピ</span>に<ruby>乾燥<rt>かんそう</rt></ruby>してしまった。」</div>
+                <div class="cn-translation">
+                    放冰箱沒包保鮮膜，飯乾得硬邦邦的。<br>
+                    <small>（解說：「カピカピ」是比帕薩帕薩更乾，完全乾掉。）</small>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="jp-sentence">「<ruby>電子<rt>でんし</rt></ruby>レンジで<ruby>温<rt>あたた</rt></ruby>めすぎると、ご<ruby>飯<rt>はん</rt></ruby>の<ruby>水分<rt>すいぶん</rt></ruby>が<ruby>飛<rt>と</rt></ruby>んで、<span class="highlight">パサついた</span><ruby>味<rt>あじ</rt></ruby>になる。」</div>
+                <div class="cn-translation">微波加熱過度，水分跑掉，味道變乾。</div>
+
+                <div class="jp-sentence" style="margin-top:20px;">「<ruby>保温<rt>ほおん</rt></ruby><ruby>機能<rt>きのう</rt></ruby>で<ruby>長時間<rt>ちょうじかん</rt></ruby><ruby>放置<rt>ほうち</rt></ruby>したご<ruby>飯<rt>はん</rt></ruby>は、<ruby>黄色<rt>きいろ</rt></ruby>くなって<ruby>湿<rt>しめ</rt></ruby>り<ruby>気<rt>け</rt></ruby>がない。」</div>
+                <div class="cn-translation">保溫太久，飯變黃且沒有濕潤感。</div>
+            </div>
+        </div>
+        <div class="page-num">16 / 22</div>
+    </div>
+
+    <!-- Slide 17: Rice 3 -->
+    <div class="slide purple-theme" id="slide-17">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2>ご<ruby>飯<rt>はん</rt></ruby> - <ruby>種類<rt>しゅるい</rt></ruby>による<ruby>違<rt>ちが</rt></ruby>い</h2>
+                
+                <div class="jp-sentence">「チャーハンにするなら、<ruby>少<rt>すこ</rt></ruby>し<ruby>水気<rt>みずけ</rt></ruby>の<ruby>少<rt>すく</rt></ruby>ないご<ruby>飯<rt>はん</rt></ruby>のほうが<ruby>向<rt>む</rt></ruby>いている。」</div>
+                <div class="cn-translation">
+                    要做炒飯的話，水分少一點的飯比較適合。<br>
+                    <small>（解說：這是正面用法。）</small>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="img-placeholder">
+                    <i class="fa-solid fa-bowl-food"></i>
+                    <small><ruby>玄米<rt>げんまい</rt></ruby></small>
+                </div>
+                <div class="jp-sentence">「<ruby>白米<rt>はくまい</rt></ruby>と<ruby>違<rt>ちが</rt></ruby>って、<ruby>玄米<rt>げんまい</rt></ruby>はどうしても<ruby>少<rt>すこ</rt></ruby>し<span class="highlight">ボソボソ</span>しがちだ。」</div>
+                <div class="cn-translation">
+                    跟白米不同，糙米口感容易偏粗糙。<br>
+                    <small>（解說：糙米皮特有的口感。）</small>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">17 / 22</div>
+    </div>
+
+    <!-- Slide 18: Fish -->
+    <div class="slide purple-theme" id="slide-18">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2>【<ruby>応用<rt>おうよう</rt></ruby>】<ruby>焼<rt>や</rt></ruby>き<ruby>魚<rt>ざかな</rt></ruby></h2>
+                
+                <div class="jp-sentence">「<ruby>焼<rt>や</rt></ruby>き<ruby>鮭<rt>ざけ</rt></ruby>を<ruby>焼<rt>や</rt></ruby>きすぎてしまって、<ruby>身<rt>み</rt></ruby>が<span class="highlight">パサパサ</span>で<ruby>美味<rt>おい</rt></ruby>しくない。」</div>
+                <div class="cn-translation">
+                    烤鮭魚烤過頭，肉質乾柴不好吃。<br>
+                    <small>（解說：油脂完全流失的狀態。）</small>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="img-placeholder">
+                    <i class="fa-solid fa-fish"></i>
+                    <small><ruby>干物<rt>ひもの</rt></ruby></small>
+                </div>
+                <div class="jp-sentence">「このアジの<ruby>干物<rt>ひもの</rt></ruby>は、<ruby>乾燥<rt>かんそう</rt></ruby>しすぎて<ruby>身<rt>み</rt></ruby>が<ruby>硬<rt>かた</rt></ruby>い。」</div>
+                <div class="cn-translation">這竹莢魚乾太乾燥，肉很硬。</div>
+            </div>
+        </div>
+        <div class="page-num">18 / 22</div>
+    </div>
+
+    <!-- Slide 19: Sides -->
+    <div class="slide purple-theme" id="slide-19">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2>【<ruby>応用<rt>おうよう</rt></ruby>】<ruby>煮物<rt>にもの</rt></ruby>・<ruby>副菜<rt>ふくさい</rt></ruby></h2>
+                
+                <div class="jp-sentence">「<ruby>卯<rt>う</rt></ruby>の<ruby>花<rt>はな</rt></ruby>（おから<ruby>煮<rt>に</rt></ruby>）は、<ruby>煮汁<rt>にじる</rt></ruby>が<ruby>足<rt>た</rt></ruby>りないと<ruby>口<rt>くち</rt></ruby>の<ruby>中<rt>なか</rt></ruby>が<span class="highlight">モソモソ</span>する。」</div>
+                <div class="cn-translation">
+                    豆渣煮汁不夠的話，吃起來嘴裡乾乾的。<br>
+                    <small>（解說：口中水分被吸走的感覺。）</small>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="jp-sentence">「<ruby>高野豆腐<rt>こうやどうふ</rt></ruby>の<ruby>戻<rt>もど</rt></ruby>し<ruby>方<rt>かた</rt></ruby>が<ruby>足<rt>た</rt></ruby>りないと、<ruby>食感<rt>しょっかん</rt></ruby>がスポンジみたいに<span class="highlight">パサつく</span>。」</div>
+                <div class="cn-translation">高野豆腐泡不夠，口感像海綿一樣乾。</div>
+            </div>
+        </div>
+        <div class="page-num">19 / 22</div>
+    </div>
+
+    <!-- Slide 20: Eggs -->
+    <div class="slide purple-theme" id="slide-20">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2>【<ruby>応用<rt>おうよう</rt></ruby>】<ruby>卵<rt>たまご</rt></ruby><ruby>料理<rt>りょうり</rt></ruby></h2>
+                
+                <div class="jp-sentence">「おでんのゆで<ruby>卵<rt>たまご</rt></ruby>、<ruby>煮<rt>に</rt></ruby><ruby>込<rt>こ</rt></ruby>みすぎて<ruby>黄身<rt>きみ</rt></ruby>が<span class="highlight">ポソポソ</span>だね。」</div>
+                <div class="cn-translation">
+                    關東煮的蛋煮太久，蛋黃乾乾粉粉的。<br>
+                    <small>（解說：像要卡在喉嚨一樣的乾。）</small>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="img-placeholder">
+                    <i class="fa-solid fa-egg"></i>
+                    <small>ゆで<ruby>卵<rt>たまご</rt></ruby></small>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">20 / 22</div>
+    </div>
+
+    <!-- Slide 21: Comparison -->
+    <div class="slide purple-theme" id="slide-21">
+        <div class="split-layout">
+            <div class="slide-content-left" style="flex: 2; overflow-y:visible;">
+                <h2><ruby>反対語<rt>はんたいご</rt></ruby>（おいしい<ruby>状態<rt>じょうたい</rt></ruby>）との<ruby>比較<rt>ひかく</rt></ruby></h2>
+                <table class="comparison-table">
+                    <tr>
+                        <th style="background:var(--accent);"><ruby>悪<rt>わる</rt></ruby>い<ruby>状態<rt>じょうたい</rt></ruby>（<ruby>水分<rt>すいぶん</rt></ruby><ruby>不足<rt>ふそく</rt></ruby>）</th>
+                        <th style="background:var(--primary-color);"><ruby>良<rt>よ</rt></ruby>い<ruby>状態<rt>じょうたい</rt></ruby>（<ruby>理想的<rt>りそうてき</rt></ruby>）</th>
+                    </tr>
+                    <tr>
+                        <td class="bad-col">パサパサのご<ruby>飯<rt>はん</rt></ruby><br><small>(乾燥的飯)</small></td>
+                        <td class="good-col">ふっくら / もちもちのご<ruby>飯<rt>はん</rt></ruby><br><small>(鬆軟/Q彈的飯)</small></td>
+                    </tr>
+                    <tr>
+                        <td class="bad-col">ボソボソしたお<ruby>米<rt>こめ</rt></ruby><br><small>(粗糙的米)</small></td>
+                        <td class="good-col">ツヤツヤ / <ruby>粘<rt>ねば</rt></ruby>りのあるお<ruby>米<rt>こめ</rt></ruby><br><small>(有光澤/有黏性的米)</small></td>
+                    </tr>
+                    <tr>
+                        <td class="bad-col"><ruby>身<rt>み</rt></ruby>がパサついた<ruby>焼<rt>や</rt></ruby>き<ruby>魚<rt>ざかな</rt></ruby><br><small>(肉質乾柴的魚)</small></td>
+                        <td class="good-col"><ruby>脂<rt>あぶら</rt></ruby>が<ruby>乗<rt>の</rt></ruby>った / ジューシーな<ruby>焼<rt>や</rt></ruby>き<ruby>魚<rt>ざかな</rt></ruby><br><small>(油脂豐富/多汁的魚)</small></td>
+                    </tr>
+                    <tr>
+                        <td class="bad-col">モソモソする<ruby>煮物<rt>にもの</rt></ruby><br><small>(乾乾的煮物)</small></td>
+                        <td class="good-col"><ruby>味<rt>あじ</rt></ruby>が<ruby>染<rt>し</rt></ruby>みた / しっとりした<ruby>煮物<rt>にもの</rt></ruby><br><small>(入味/濕潤的煮物)</small></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="page-num">21 / 22</div>
+    </div>
+
+    <!-- Slide 22: Quiz -->
+    <div class="slide purple-theme" id="slide-22">
+        <div class="split-layout">
+            <div class="slide-content-left">
+                <h2><ruby>練習<rt>れんしゅう</rt></ruby><ruby>問題<rt>もんだい</rt></ruby></h2>
+                <div class="text-lg">1. おにぎりをラップに<ruby>包<rt>つつ</rt></ruby>まずに<ruby>置<rt>お</rt></ruby>いておいたら、<ruby>表面<rt>ひょうめん</rt></ruby>が（　　）になってしまった。</div>
+                <div class="text-md" style="margin-left: 20px;">(飯糰沒包保鮮膜放著，表面變___了。)</div>
+                <div style="margin-left: 20px;">
+                    <span class="quiz-option">A. もちもち (Q彈)</span>
+                    <span class="quiz-option">B. パサパサ (乾燥)</span>
+                </div>
+
+                <hr style="margin:20px 0; border:0; border-top:1px dashed #ccc;">
+
+                <div class="text-lg">2. <ruby>安<rt>やす</rt></ruby>いお<ruby>弁当<rt>べんとう</rt></ruby>のご<ruby>飯<rt>はん</rt></ruby>は、<ruby>冷<rt>ひ</rt></ruby>えているせいか（　　）していて<ruby>飲<rt>の</rt></ruby>み<ruby>込<rt>こ</rt></ruby>みにくい。</div>
+                <div class="text-md" style="margin-left: 20px;">(便宜便當的飯可能冷了，吃起來___很難吞。)</div>
+                <div style="margin-left: 20px;">
+                    <span class="quiz-option">A. モソモソ (乾乾粉粉)</span>
+                    <span class="quiz-option">B. ジューシー (多汁)</span>
+                </div>
+            </div>
+            <div class="slide-content-right">
+                <div class="text-lg">3. このご<ruby>飯<rt>はん</rt></ruby>は（　　）<ruby>食感<rt>しょっかん</rt></ruby>で、まるでお<ruby>米<rt>こめ</rt></ruby>の<ruby>粘<rt>ねば</rt></ruby>り<ruby>気<rt>け</rt></ruby>がない。</div>
+                <div class="text-md" style="margin-left: 20px;">(這飯口感___，完全沒有米的黏性。)</div>
+                <div style="margin-left: 20px;">
+                    <span class="quiz-option">A. ボソボソした (粗糙鬆散)</span>
+                    <span class="quiz-option">B. ふっくらした (蓬鬆)</span>
+                </div>
+            </div>
+        </div>
+        <div class="page-num">22 / 22</div>
+    </div>
+
+</div>
+
+<script>
+    // --- 變數設定 ---
+    let currentSlide = 1;
+    const totalSlides = 22;
+    const canvas = document.getElementById('drawing-canvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let currentMode = 'pointer'; // 預設改為鼠標模式
+    let lastX = 0;
+    let lastY = 0;
+    let brushColor = '#000000';
+    let brushSize = 3;
+
+    // --- 初始化 20 色盤 ---
+    const colors = [
+        '#000000', '#545454', '#808080', '#A9A9A9', '#FFFFFF',
+        '#FF0000', '#FF4081', '#9C27B0', '#673AB7', '#3F51B5',
+        '#2196F3', '#03A9F4', '#00BCD4', '#009688', '#4CAF50',
+        '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800'
+    ];
+    
+    const palette = document.getElementById('color-palette');
+    colors.forEach((color, index) => {
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = color;
+        if(index === 0) swatch.classList.add('active');
+        swatch.onclick = () => selectColor(color, swatch);
+        palette.appendChild(swatch);
+    });
+
+    // --- 畫布設定 ---
+    let slideDrawings = new Array(totalSlides + 1).fill(null);
+
+    function saveCurrentDrawing() {
+        slideDrawings[currentSlide] = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    function restoreDrawing() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (slideDrawings[currentSlide]) {
+            ctx.putImageData(slideDrawings[currentSlide], 0, 0);
+        }
+    }
+
+    // --- 繪圖邏輯 (僅在 draw 模式生效) ---
+    canvas.addEventListener('mousedown', (e) => {
+        if (currentMode !== 'draw') return;
+        isDrawing = true;
+        [lastX, lastY] = [e.offsetX, e.offsetY];
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isDrawing || currentMode !== 'draw') return;
+        draw(e.offsetX, e.offsetY);
+    });
+
+    canvas.addEventListener('mouseup', () => isDrawing = false);
+    canvas.addEventListener('mouseout', () => isDrawing = false);
+
+    function draw(x, y) {
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = brushColor;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        [lastX, lastY] = [x, y];
+    }
+
+    // --- 工具列功能 ---
+    function selectColor(color, el) {
+        brushColor = color;
+        ctx.globalCompositeOperation = 'source-over';
+        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    function setEraser() {
+        ctx.globalCompositeOperation = 'destination-out';
+        setMode('draw');
+    }
+
+    document.getElementById('brush-size').addEventListener('input', (e) => {
+        brushSize = e.target.value;
+    });
+
+    function clearCanvas() {
+        if(confirm('確定要清除本頁所有筆跡嗎？（打字的內容不會消失）')) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            slideDrawings[currentSlide] = null;
+        }
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.body.className = mode + '-mode';
+        
+        document.getElementById('mode-pointer').classList.toggle('active', mode === 'pointer');
+        document.getElementById('mode-text').classList.toggle('active', mode === 'text');
+        document.getElementById('mode-draw').classList.toggle('active', mode === 'draw');
+
+        // 控制畫布是否擋住底層
+        if (mode === 'draw') {
+            canvas.style.pointerEvents = 'auto'; 
+        } else {
+            canvas.style.pointerEvents = 'none'; // 讓滑鼠穿透
+        }
+    }
+
+    // --- 幻燈片切換 ---
+    function changeSlide(direction) {
+        saveCurrentDrawing();
+        document.getElementById(`slide-${currentSlide}`).classList.remove('active');
+        currentSlide += direction;
+        if (currentSlide < 1) currentSlide = 1;
+        if (currentSlide > totalSlides) currentSlide = totalSlides;
+        document.getElementById(`slide-${currentSlide}`).classList.add('active');
+        document.getElementById('slide-indicator').innerText = `${currentSlide} / ${totalSlides}`;
+        restoreDrawing();
+    }
+
+    // --- 打字框功能 ---
+    const presArea = document.getElementById('presentation-area');
+    presArea.addEventListener('click', (e) => {
+        if (currentMode !== 'text') return;
+        if (e.target.closest('.user-text-box')) return;
+        createUserTextBox(e.offsetX, e.offsetY);
+    });
+
+    function createUserTextBox(x, y) {
+        const activeSlide = document.querySelector('.slide.active');
+        const box = document.createElement('div');
+        box.className = 'user-text-box';
+        box.style.left = x + 'px';
+        box.style.top = y + 'px';
+        box.style.color = brushColor;
+        
+        const handle = document.createElement('div');
+        handle.className = 'text-drag-handle';
+        box.appendChild(handle);
+
+        const content = document.createElement('div');
+        content.className = 'text-content';
+        content.contentEditable = true;
+        content.innerText = ''; 
+        box.appendChild(content);
+        activeSlide.appendChild(box);
+        setTimeout(() => content.focus(), 0);
+        setupDrag(box, handle);
+    }
+
+    function setupDrag(element, handle) {
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        handle.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            initialLeft = element.offsetLeft;
+            initialTop = element.offsetTop;
+            e.preventDefault();
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            element.style.left = (initialLeft + dx) + 'px';
+            element.style.top = (initialTop + dy) + 'px';
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+    }
+
+    // --- PDF 匯出 ---
+    async function savePDF() {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('l', 'pt', [1024, 768]);
+        const presentationArea = document.getElementById('presentation-area');
+        const originalSlide = currentSlide;
+        const btn = document.querySelector('.btn-pdf');
+        const oldText = btn.innerText;
+        btn.innerText = "生成中...";
+        btn.disabled = true;
+
+        try {
+            saveCurrentDrawing();
+            for (let i = 1; i <= totalSlides; i++) {
+                document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+                document.getElementById(`slide-${i}`).classList.add('active');
+                
+                await new Promise(r => setTimeout(r, 100));
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (slideDrawings[i]) {
+                    ctx.putImageData(slideDrawings[i], 0, 0);
+                }
+
+                let bg = "#FFF8E1"; 
+                if(i === 1) bg = "#FFECB3"; 
+                else if(i >= 7 && i <= 9) bg = "#E3F2FD"; 
+                else if(i >= 10) bg = "#f3e5f5"; 
+
+                const canvasData = await html2canvas(presentationArea, {
+                    scale: 1.5,
+                    useCORS: true,
+                    backgroundColor: bg
+                });
+
+                const imgData = canvasData.toDataURL('image/jpeg', 0.9);
+                if (i > 1) pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, 0, 1024, 768);
+            }
+            pdf.save('おんさんそうさんの日本語クラス_完整版.pdf');
+        } catch (error) {
+            console.error('PDF失敗', error);
+            alert('PDF生成失敗。');
+        } finally {
+            document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+            document.getElementById(`slide-${originalSlide}`).classList.add('active');
+            restoreDrawing();
+            btn.innerText = oldText;
+            btn.disabled = false;
+        }
+    }
+    
+    // 初始化
+    saveCurrentDrawing();
+    // 預設選取模式
+    setMode('pointer'); 
+
+</script>
+</body>
+</html>
